@@ -26,8 +26,7 @@ jobs:
       run: |
         choco install -y make
         choco install -y swig --version=3.0.12
-        echo ${{ env.PYTHON_INSTALL_DIR }}
-        choco install -y python3 --version=${{ env.PYTHON3_VERSION }} --installargs="/quiet Include_debug=1 TargetDir=${{ env.PYTHON_INSTALL_DIR }}"
+        choco install -y python3 --version=${{ env.PYTHON3_VERSION }} --installargs="/quiet Include_debug=1 TargetDir=%pythonLocation%"
 
     - name: Setup Java
       uses: actions/setup-java@v1
@@ -61,7 +60,7 @@ jobs:
       run: |
         echo 'CC=cl' >> $GITHUB_ENV
         echo 'CXX=cl' >> $GITHUB_ENV
-        ls -ltrR ${{ env.PYTHON_INSTALL_DIR }}
+        ls -ltrR $pythonLocation
       shell: bash
 
     - name: Pull UHDM
@@ -112,7 +111,7 @@ jobs:
         where python && python --version
         where ninja && ninja --version
 
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPython3_FIND_STRATEGY=${{ env.PYTHON3_VERSION }} -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
+        cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPython3_ROOT_DIR=%pythonLocation% -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
         cmake --build out/build -j %NUMBER_OF_PROCESSORS%
         cmake --install out/build
 
