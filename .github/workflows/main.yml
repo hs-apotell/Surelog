@@ -5,166 +5,27 @@ on:
   pull_request:
 
 jobs:
-  linux:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-    - name: Install dependencies
-      run: |
-        sudo apt-get update -qq
-        sudo apt install -y \
-          g++-7 \
-          tclsh \
-          default-jre \
-          cmake \
-          build-essential \
-          swig \
-          google-perftools \
-          libgoogle-perftools-dev \
-          uuid-dev
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
-
-    - uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        fetch-depth: 0
-
-    - name: Configure shell
-      run: |
-        echo 'CC=gcc-7' >> $GITHUB_ENV
-        echo 'CXX=g++-7' >> $GITHUB_ENV
-        echo 'PREFIX=/usr/local' >> $GITHUB_ENV
-
-    - name: Show shell configuration
-      run: |
-        env
-        which cmake && cmake --version
-        which make && make --version
-        which swig && swig -version
-        which java && java -version
-        which python && python --version
-        which ninja && ninja --version
-        which tclsh && echo 'puts [info patchlevel];exit 0' | tclsh
-        which $CC && $CC --version
-        which $CXX && $CXX --version
-
-    - name: Build
-      run: |
-        make release
-        sudo make install
-
-    - name: Test
-      run: |
-        make test_install
-        make test/unittest
-        make regression
-
-  msys2-gcc:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-
-    steps:
-    - name: Install core dependencies
-      run: choco install -y swig --version=3.0.12
-      shell: powershell
-
-    - name: Setup Java
-      uses: actions/setup-java@v1
-      with:
-        java-version: 1.8.0.275
-        java-package: jre
-        architecture: x64
-
-    - name: Setup Msys2
-      uses: msys2/setup-msys2@v2
-      with:
-        msystem: MSYS
-        update: true
-        install: make cmake ninja python python-devel gcc
-      env:
-        MSYS2_PATH_TYPE: inherit
-
-    - name: Configure Git
-      run: git config --global core.autocrlf input
-      shell: bash
-
-    - name: Git pull
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        fetch-depth: 0
-
-    - name: Configure shell environment variables
-      run: |
-        export SWIG_DIR=/c/ProgramData/chocolatey/lib/swig/tools/install/swigwin-3.0.12
-        export JAVA_HOME=`cygpath -u $JAVA_HOME_8_0_275_X64`
-        export CWD=`pwd`
-
-        echo "SWIG_DIR=$SWIG_DIR" >> $GITHUB_ENV
-        echo "JAVA_HOME=$JAVA_HOME" >> $GITHUB_ENV
-        echo 'CMAKE_GENERATOR=Ninja' >> $GITHUB_ENV
-        echo 'CC=gcc' >> $GITHUB_ENV
-        echo 'CXX=g++' >> $GITHUB_ENV
-        echo 'NO_TCMALLOC=On' >> $GITHUB_ENV
-        echo "PREFIX=$CWD/install" >> $GITHUB_ENV
-
-        echo "$SWIG_DIR" >> $GITHUB_PATH
-        echo "$JAVA_HOME/bin" >> $GITHUB_PATH
-
-    - name: Show shell configuration
-      run: |
-        export PATH=$SWIG_DIR:$JAVA_HOME/bin:$PATH
-        export PATH=$SWIG_DIR:$PATH
-        env
-        where cmake && cmake --version
-        where make && make --version
-        where swig && swig -version
-        where java && java -version
-        where python && python --version
-        where ninja && ninja --version
-        where tclsh && echo 'puts [info patchlevel];exit 0' | tclsh
-        where $CC && $CC --version
-        where $CXX && $CXX --version
-
-    - name: Build
-      run: |
-        export PATH=$SWIG_DIR:$JAVA_HOME/bin:$PATH
-        make release
-        make install
-
-    - name: Test
-      run: |
-        export PATH=$SWIG_DIR:$JAVA_HOME/bin:$PATH
-        make test_install
-        make test/unittest
-        make regression
-
-  windows-msvc:
-    runs-on: windows-latest
+  windows-msvc-debug:
+    runs-on: windows-2019
 
     defaults:
       run:
         shell: cmd
 
     steps:
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8.6
+        architecture: x64
+
     - name: Install Core Dependencies
       run: |
         choco install -y make
         choco install -y swig --version=3.0.12
-
-    - name: Setup Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.8
-        architecture: x64
+        echo ${{ env.PYTHON_INSTALL_DIR }}
+        choco install -y python3 --version=3.8.6 --installargs="/quiet Include_debug=1 TargetDir=${{ env.PYTHON_INSTALL_DIR }}"
+        ls -ltrR ${{ env.PYTHON_INSTALL_DIR }}
 
     - name: Setup Java
       uses: actions/setup-java@v1
@@ -176,26 +37,69 @@ jobs:
     - run: git config --global core.autocrlf input
       shell: bash
 
-    - uses: actions/checkout@v2
+    - name: Get top commit details
+      uses: actions/github-script@0.3.0
+      id: author-date
       with:
-        submodules: recursive
-        fetch-depth: 0
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const commit_details = await github.git.getCommit({ owner: context.repo.owner, repo: context.repo.repo, commit_sha: context.sha });
+          return commit_details.data.author.date
 
-    - name: Build & Test
+    - name: Retrieve date
+      run: |
+        echo "COMMITTED_AT=$(date -d ${{ steps.author-date.outputs.result }} +'%Y.%m.%d_%H.%M.%S')" >> $GITHUB_ENV
+        echo ${{ env.COMMITTED_AT }}
+      shell: bash
+
+    - name: Git Pull
+      uses: actions/checkout@v2
+
+    - name: Configure shell
+      run: |
+        echo 'CC=cl' >> $GITHUB_ENV
+        echo 'CXX=cl' >> $GITHUB_ENV
+      shell: bash
+
+    - name: Pull UHDM
+      uses: actions/checkout@v2
+      with:
+        repository: alainmarcel/UHDM
+        path: third_party/UHDM
+        # token: ${{ secrets.GHA_DAVENCHE_CI_TOKEN }}
+
+    - name: Pull flatbuffers
+      uses: actions/checkout@v2
+      with:
+        repository: google/flatbuffers
+        path: third_party/flatbuffers
+        # token: ${{ secrets.GHA_DAVENCHE_CI_TOKEN }}
+
+    - name: Pull googletest
+      uses: actions/checkout@v2
+      with:
+        repository: google/googletest
+        path: third_party/googletest
+
+    - name: Pull capnproto
+      uses: actions/checkout@v2
+      with:
+        repository: capnproto/capnproto
+        path: third_party/UHDM/third_party/capnproto
+        # token: ${{ secrets.GHA_DAVENCHE_CI_TOKEN }}
+
+    - name: Build
       run: |
         call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
 
-        set CMAKE_GENERATOR=Ninja
         set CC=cl
         set CXX=cl
         set NO_TCMALLOC=On
-        set PREFIX=%GITHUB_WORKSPACE%\install
-        set CPU_CORES=%NUMBER_OF_PROCESSORS%
 
         set MAKE_DIR=C:\make\bin
         set TCL_DIR=%PROGRAMFILES%\Git\mingw64\bin
         set SWIG_DIR=%PROGRMDATA%\chocolatey\lib\swig\tools\install\swigwin-3.0.12
-        set PATH=%pythonLocation%;%SWIG_DIR%;%JAVA_HOME%\bin;%MAKE_DIR%;%TCL_DIR%;%PATH%
+        set PATH=%SWIG_DIR%;%JAVA_HOME%\bin;%MAKE_DIR%;%TCL_DIR%;%PATH%
 
         set
         where cmake && cmake --version
@@ -205,8 +109,25 @@ jobs:
         where python && python --version
         where ninja && ninja --version
 
-        make release
-        make install
-        make test_install
-        make test/unittest
-        make regression
+        cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
+        cmake --build out/build -j %NUMBER_OF_PROCESSORS%
+        cmake --install out/build
+
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: Surelog_windows-msvc-debug_${{ env.COMMITTED_AT }}
+        path: out/install
+
+#    - name: Configure AWS Credentials
+#      uses: aws-actions/configure-aws-credentials@v1
+#      with:
+#        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#        aws-region: us-west-1
+#
+#    - name: Upload archive to bucket
+#      run: |
+#        cd out
+#        tar czfp Surelog_windows-msvc-debug_${{ env.COMMITTED_AT }}.tgz install
+#        aws s3 cp Surelog_windows-msvc-debug_${{ env.COMMITTED_AT }}.tgz s3://davenche-bin/Surelog_windows-msvc-debug_${{ env.COMMITTED_AT }}.tgz
