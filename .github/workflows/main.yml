@@ -6,6 +6,7 @@ on:
 
 env:
   PYTHON3_VERSION: 3.8.6
+  NO_TCMALLOC: On
 
 jobs:
   windows-msvc:
@@ -18,7 +19,6 @@ jobs:
     env:
       CC: cl
       CXX: cl
-      NO_TCMALLOC: On
 
     defaults:
       run:
@@ -44,10 +44,6 @@ jobs:
         java-package: jre
         architecture: x64
 
-    - name: Configure Git
-      run: git config --global core.autocrlf input
-      shell: bash
-
     - name: Get top commit details
       uses: actions/github-script@0.3.0
       id: author-date
@@ -55,15 +51,12 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
           const commit_details = await github.git.getCommit({ owner: context.repo.owner, repo: context.repo.repo, commit_sha: context.sha });
-          echo "COMMITTED_AT2=$(date -d commit_details +'%Y.%m.%d_%H.%M.%S')" >> $GITHUB_ENV
-          echo ${{ env.COMMITTED_AT2 }}
           return commit_details.data.author.date
 
-    - name: Retrieve date
+    - name: Configure Git and setup environment
       run: |
+        git config --global core.autocrlf input
         echo "COMMITTED_AT=$(date -d ${{ steps.author-date.outputs.result }} +'%Y.%m.%d_%H.%M.%S')" >> $GITHUB_ENV
-        echo "COMMITTED_AT=${{ env.COMMITTED_AT }}"
-        echo "COMMITTED_AT2=${{ env.COMMITTED_AT2 }}"
       shell: bash
 
     - name: Git Pull
@@ -96,8 +89,7 @@ jobs:
         path: third_party/UHDM/third_party/capnproto
         # token: ${{ secrets.GHA_DAVENCHE_CI_TOKEN }}
 
-    - name: Build Debug
-      if: matrix.configuration == 'debug'
+    - name: Build
       run: |
         call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
 
@@ -114,29 +106,12 @@ jobs:
         where python && python --version
         where ninja && ninja --version
 
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPython3_ROOT_DIR=%pythonLocation% -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
-        cmake --build out/build -j %NUMBER_OF_PROCESSORS%
-        cmake --install out/build
-
-    - name: Build Release
-      if: matrix.configuration == 'release'
-      run: |
-        call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-
-        set MAKE_DIR=C:\make\bin
-        set TCL_DIR=%PROGRAMFILES%\Git\mingw64\bin
-        set SWIG_DIR=%PROGRMDATA%\chocolatey\lib\swig\tools\install\swigwin-3.0.12
-        set PATH=%SWIG_DIR%;%JAVA_HOME%\bin;%MAKE_DIR%;%TCL_DIR%;%PATH%
-
-        set
-        where cmake && cmake --version
-        where make && make --version
-        where swig && swig -version
-        where java && java -version
-        where python && python --version
-        where ninja && ninja --version
-
-        cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPython3_ROOT_DIR=%pythonLocation% -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
+        if "${{ matrix.configuration }}" EQ "debug" (
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPython3_ROOT_DIR=%pythonLocation% -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
+        ) else (
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPython3_ROOT_DIR=%pythonLocation% -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
+        )
+        
         cmake --build out/build -j %NUMBER_OF_PROCESSORS%
         cmake --install out/build
 
