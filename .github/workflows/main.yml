@@ -85,6 +85,13 @@ jobs:
         path: third_party/UHDM/third_party/capnproto
         # token: ${{ secrets.GHA_DAVENCHE_CI_TOKEN }}
 
+    - name: Pull googletest
+      uses: actions/checkout@v2
+      with:
+        repository: google/googletest
+        path: third_party/googletest
+        # token: ${{ secrets.GHA_DAVENCHE_CI_TOKEN }}
+
     - name: Build
       run: |
         env
@@ -200,6 +207,13 @@ jobs:
       with:
         repository: capnproto/capnproto
         path: third_party/UHDM/third_party/capnproto
+        # token: ${{ secrets.GHA_DAVENCHE_CI_TOKEN }}
+
+    - name: Pull googletest
+      uses: actions/checkout@v2
+      with:
+        repository: google/googletest
+        path: third_party/googletest
         # token: ${{ secrets.GHA_DAVENCHE_CI_TOKEN }}
 
     - name: Build
