@@ -13,6 +13,7 @@ jobs:
     runs-on: windows-2019
 
     strategy:
+      fail-fast: false
       matrix:
         configuration: [ debug, release ]
 
@@ -106,12 +107,12 @@ jobs:
         where python && python --version
         where ninja && ninja --version
 
-        if "${{ matrix.configuration }}" EQ "debug" (
+        if "${{ matrix.configuration }}" EQU "debug" (
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPython3_ROOT_DIR=%pythonLocation% -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
         ) else (
           cmake -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPython3_ROOT_DIR=%pythonLocation% -DCMAKE_INSTALL_PREFIX=out/install -S . -B out/build
         )
-        
+
         cmake --build out/build -j %NUMBER_OF_PROCESSORS%
         cmake --install out/build
 
